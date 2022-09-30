@@ -1,0 +1,25 @@
+{
+  "name": "ryder",
+  "version": "0.1.0",
+  "description": "Remote procedure call & subscription using postMessage",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "sideEffects": false,
+  "author": {
+    "name": "Zhongliang Wang",
+    "email": "zwang@rational.studio"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "prettier": "^2.7.1",
+    "type-fest": "^3.0.0",
+    "typescript": "^4.8.4"
+  },
+  "dependencies": {
+    "nanoid": "^4.0.0",
+    "tslib": "^2.4.0"
+  }
+}
