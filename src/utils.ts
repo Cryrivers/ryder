@@ -7,7 +7,16 @@ import {
 } from './constants';
 import { ClientPayload, ServerPayload } from './typings';
 
+/**
+ * @internal
+ */
 export const generateRequestId = () => nanoid(10);
+
+/**
+ * @internal
+ */
+export const generateSubscriptionKey = (propertyPath: PropertyKey[]) =>
+  propertyPath.join('_');
 
 function isRyderPayload(
   payload: unknown

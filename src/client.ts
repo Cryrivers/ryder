@@ -60,7 +60,8 @@ export function createClientBridge(options: {
     if (target) {
       // Optimise the pending command queue
       optimizeCommandQueue();
-      for (const payload of pendingCommandQueue) {
+      let payload: ClientPayload | undefined;
+      while ((payload = pendingCommandQueue.shift())) {
         target.postMessage(JSON.stringify(serializer(payload)));
       }
     } else {

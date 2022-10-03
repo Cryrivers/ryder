@@ -4,13 +4,19 @@ import {
   RYDER_REQUEST_ID_FIELD,
 } from './constants';
 import {
+  DiscoveryServerPayload,
   InvokeServerErrorPayload,
   InvokeServerSuccessPayload,
   SubscribeServerSuccessPayload,
   SubscribeServerUpdatePayload,
   UnsubscribeServerSuccessPayload,
 } from './typings';
-import { isRyderClientPayload, noProcessing } from './utils';
+import {
+  generateRequestId,
+  generateSubscriptionKey,
+  isRyderClientPayload,
+  noProcessing,
+} from './utils';
 
 export function createServerBridge(options: {
   serializer?: (value: unknown) => unknown;
@@ -85,7 +91,7 @@ export function createServerBridge(options: {
         }
         case RyderCommand.SubscribeClient: {
           const { propertyPath } = payload;
-          const subscriptionKey = propertyPath.join('_');
+          const subscriptionKey = generateSubscriptionKey(propertyPath);
           const sub = subscriptionManager.get(subscriptionKey);
           const clientRequestId = payload[RYDER_REQUEST_ID_FIELD];
           if (sub) {
@@ -135,7 +141,7 @@ export function createServerBridge(options: {
         }
         case RyderCommand.UnsubscribeClient: {
           const { propertyPath, subscriptionRequestId } = payload;
-          const subscriptionKey = propertyPath.join('_');
+          const subscriptionKey = generateSubscriptionKey(propertyPath);
           const sub = subscriptionManager.get(subscriptionKey);
 
           if (sub) {
@@ -194,8 +200,18 @@ export function createServerBridge(options: {
   }
 
   return {
-    broadcastDiscoveryMessage: () => {
-      // TODO: Implement
+    sendDiscoveryMessage: (sources: MessageEventSource[]) => {
+      const requestId = generateRequestId();
+      sources.forEach(source =>
+        source.postMessage(
+          JSON.stringify(
+            serializer({
+              [RYDER_REQUEST_ID_FIELD]: requestId,
+              [RYDER_COMMAND_FIELD]: RyderCommand.DiscoveryServer,
+            } as DiscoveryServerPayload)
+          )
+        )
+      );
     },
     messageHandler: clientPayloadHandler,
   };
