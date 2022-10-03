@@ -56,6 +56,10 @@ export interface UnsubscribeServerErrorPayload extends RequestId {
   [RYDER_COMMAND_FIELD]: RyderCommand.UnsubscribeServerError;
 }
 
+export interface DiscoveryServerPayload extends RequestId {
+  [RYDER_COMMAND_FIELD]: RyderCommand.DiscoveryServer;
+}
+
 export type ClientPayload =
   | InvokeClientPayload
   | SubscribeClientPayload
@@ -67,4 +71,5 @@ export type ServerPayload =
   | SubscribeServerErrorPayload
   | SubscribeServerUpdatePayload
   | UnsubscribeServerSuccessPayload
-  | UnsubscribeServerErrorPayload;
+  | UnsubscribeServerErrorPayload
+  | DiscoveryServerPayload;

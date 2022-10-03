@@ -1,5 +1,6 @@
 /* @internal */
 export const enum RyderCommand {
+  DiscoveryServer,
   InvokeClient,
   InvokeServerSuccess,
   InvokeServerError,
@@ -28,6 +29,7 @@ export const RyderServerCommands = [
   RyderCommand.SubscribeServerError,
   RyderCommand.UnsubscribeServerSuccess,
   RyderCommand.UnsubscribeServerError,
+  RyderCommand.DiscoveryServer,
 ];
 
 /* @internal */

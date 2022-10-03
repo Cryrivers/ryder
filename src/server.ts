@@ -22,7 +22,7 @@ export function createServerBridge(options: {
   subscriptionHandler: (
     propertyPath: PropertyKey[],
     onValueChange: (value: unknown) => void
-  ) => () => void;
+  ) => (() => void) | Promise<() => void>;
 }) {
   const {
     serializer = noProcessing,
@@ -94,27 +94,30 @@ export function createServerBridge(options: {
               subscriptionRequestId: clientRequestId,
             });
           } else {
-            const unsubscribe = subscriptionHandler(propertyPath, value => {
-              // Send the value changes to all listeners
-              const sub = subscriptionManager.get(subscriptionKey);
-              if (sub) {
-                sub.listeners.forEach(({ source, subscriptionRequestId }) =>
-                  source.postMessage(
-                    JSON.stringify(
-                      serializer({
-                        [RYDER_COMMAND_FIELD]:
-                          RyderCommand.SubscribeServerUpdate,
-                        [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId,
-                        value,
-                      } as SubscribeServerUpdatePayload)
+            const unsubscribe = await subscriptionHandler(
+              propertyPath,
+              value => {
+                // Send the value changes to all listeners
+                const sub = subscriptionManager.get(subscriptionKey);
+                if (sub) {
+                  sub.listeners.forEach(({ source, subscriptionRequestId }) =>
+                    source.postMessage(
+                      JSON.stringify(
+                        serializer({
+                          [RYDER_COMMAND_FIELD]:
+                            RyderCommand.SubscribeServerUpdate,
+                          [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId,
+                          value,
+                        } as SubscribeServerUpdatePayload)
+                      )
                     )
-                  )
-                );
-              } else {
-                // Potential Memory Leaking
-                // need to log the error
+                  );
+                } else {
+                  // Potential Memory Leaking
+                  // need to log the error
+                }
               }
-            });
+            );
             subscriptionManager.set(subscriptionKey, {
               unsubscribe,
               listeners: [{ source, subscriptionRequestId: clientRequestId }],
@@ -191,6 +194,9 @@ export function createServerBridge(options: {
   }
 
   return {
+    broadcastDiscoveryMessage: () => {
+      // TODO: Implement
+    },
     messageHandler: clientPayloadHandler,
   };
 }

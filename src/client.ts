@@ -4,14 +4,17 @@ import {
   RyderCommand,
 } from './constants';
 import {
+  ClientPayload,
   InvokeClientPayload,
   SubscribeClientPayload,
   UnsubscribeClientPayload,
 } from './typings';
 import { generateRequestId, isRyderServerPayload, noProcessing } from './utils';
 
+const MAX_QUEUED_COMMANDS = 100;
+
 export function createClientBridge(options: {
-  serverFinder: () => MessageEventSource;
+  serverFinder: (() => MessageEventSource | null) | false; // Passive Mode if false
   serializer?: (value: unknown) => unknown;
   deserializer?: (value: unknown) => unknown;
 }) {
@@ -20,6 +23,9 @@ export function createClientBridge(options: {
     serializer = noProcessing,
     deserializer = noProcessing,
   } = options;
+
+  let target: MessageEventSource | null = null;
+  const pendingCommandQueue: ClientPayload[] = [];
   const subscriptionRequestIdMap = new Map<string, (value: unknown) => void>();
   const invokeRequestIdPromiseMap = new Map<
     string,
@@ -28,6 +34,44 @@ export function createClientBridge(options: {
       reject: (reason?: unknown) => void;
     }
   >();
+
+  function optimizeCommandQueue() {
+    if (pendingCommandQueue.length <= 1) {
+      // No commands or only one command. No
+      // need to optimise
+      return;
+    }
+    // Negate Subscribe / Unsubscribe with the same request id, removing both from the queue
+
+    // TODO: To be implemented
+
+    // Coalesce multiple invokes with the same param into 1 message
+
+    // TODO: To be implemented
+  }
+
+  function flushPendingCommandQueue() {
+    if (serverFinder && !target) {
+      // Active Mode (Client actively searching for Server)
+      // Call `serverFinder` see if we can find a server
+      target = serverFinder();
+    }
+
+    if (target) {
+      // Optimise the pending command queue
+      optimizeCommandQueue();
+      for (const payload of pendingCommandQueue) {
+        target.postMessage(JSON.stringify(serializer(payload)));
+      }
+    } else {
+      // Throw an error if the number of commands hit the upper limit
+      if (pendingCommandQueue.length > MAX_QUEUED_COMMANDS) {
+        throw new Error(
+          'Too many queued commands and no RyderServer found and connected.'
+        );
+      }
+    }
+  }
 
   function serverPayloadHandler(event: MessageEvent<string>) {
     const { data } = event;
@@ -41,6 +85,16 @@ export function createClientBridge(options: {
     if (isRyderServerPayload(payload)) {
       console.log(`[RyderClient] Payload:`, payload);
       switch (payload[RYDER_COMMAND_FIELD]) {
+        case RyderCommand.DiscoveryServer: {
+          if (serverFinder) {
+            // Active Mode (Client actively searching for Server)
+            // So we ignore the server discovery message
+          } else {
+            target = event.source;
+            flushPendingCommandQueue();
+          }
+          break;
+        }
         case RyderCommand.InvokeServerSuccess: {
           const promiseHandler = invokeRequestIdPromiseMap.get(
             payload[RYDER_REQUEST_ID_FIELD]
@@ -101,49 +155,40 @@ export function createClientBridge(options: {
   return {
     invoke(propertyPath: PropertyKey[], ...args: unknown[]) {
       const requestId = generateRequestId();
-      const target = serverFinder();
       console.log(`[Invoke] Request Id: ${requestId}`);
-      target.postMessage(
-        JSON.stringify(
-          serializer({
-            [RYDER_COMMAND_FIELD]: RyderCommand.InvokeClient,
-            [RYDER_REQUEST_ID_FIELD]: requestId,
-            propertyPath,
-            args,
-          } as InvokeClientPayload)
-        )
-      );
+
+      pendingCommandQueue.push({
+        [RYDER_COMMAND_FIELD]: RyderCommand.InvokeClient,
+        [RYDER_REQUEST_ID_FIELD]: requestId,
+        propertyPath,
+        args,
+      } as InvokeClientPayload);
 
       return new Promise((resolve, reject) => {
         invokeRequestIdPromiseMap.set(requestId, { resolve, reject });
+        flushPendingCommandQueue();
       });
     },
     subscribe(propertyPath: PropertyKey[], onChange: (value: any) => void) {
-      const target = serverFinder();
       const subscriptionRequestId = generateRequestId();
       subscriptionRequestIdMap.set(subscriptionRequestId, onChange);
-      target.postMessage(
-        JSON.stringify(
-          serializer({
-            [RYDER_COMMAND_FIELD]: RyderCommand.SubscribeClient,
-            [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId,
-            propertyPath,
-          } as SubscribeClientPayload)
-        )
-      );
+
+      pendingCommandQueue.push({
+        [RYDER_COMMAND_FIELD]: RyderCommand.SubscribeClient,
+        [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId,
+        propertyPath,
+      } as SubscribeClientPayload);
+      flushPendingCommandQueue();
 
       return () => {
         const requestId = generateRequestId();
-        target.postMessage(
-          JSON.stringify(
-            serializer({
-              [RYDER_COMMAND_FIELD]: RyderCommand.UnsubscribeClient,
-              [RYDER_REQUEST_ID_FIELD]: requestId,
-              subscriptionRequestId: subscriptionRequestId,
-              propertyPath,
-            } as UnsubscribeClientPayload)
-          )
-        );
+        pendingCommandQueue.push({
+          [RYDER_COMMAND_FIELD]: RyderCommand.UnsubscribeClient,
+          [RYDER_REQUEST_ID_FIELD]: requestId,
+          subscriptionRequestId: subscriptionRequestId,
+          propertyPath,
+        } as UnsubscribeClientPayload);
+        flushPendingCommandQueue();
         subscriptionRequestIdMap.delete(subscriptionRequestId);
       };
     },
