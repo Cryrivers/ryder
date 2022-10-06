@@ -1,8 +1,8 @@
 {
   "name": "ryder",
   "version": "0.1.0",
-  "description": "Remote procedure call & subscription using postMessage",
-  "main": "lib/index.js",
+  "description": "Remote Procedure Call & Subscription using `postMessage`",
+  "module": "lib/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,9 +10,14 @@
   "sideEffects": false,
   "author": {
     "name": "Zhongliang Wang",
-    "email": "zwang@rational.studio"
+    "email": "zwang@rational.studio",
+    "url": "https://github.com/Cryrivers"
   },
-  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Cryrivers/ryder"
+  },
+  "license": "MIT",
   "devDependencies": {
     "prettier": "^2.7.1",
     "type-fest": "^3.0.0",
