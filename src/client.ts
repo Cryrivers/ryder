@@ -2,7 +2,6 @@ import {
   RYDER_COMMAND_FIELD,
   RYDER_REQUEST_ID_FIELD,
   RyderCommand,
-  RyderServerCommands,
 } from './constants';
 import {
   isRyderServerPayload,
@@ -29,7 +28,7 @@ export function createClientBridge(options: {
   } = options;
 
   let target: MessageEventSource | null = null;
-  const _pendingCommandQueue: ClientPayloadNoCoalescingRequest[] = [];
+  const pendingCommandQueue: ClientPayloadNoCoalescingRequest[] = [];
   const subscriptionRequestIdMap = new Map<string, (value: unknown) => void>();
   const invokeRequestIdPromiseMap = new Map<
     string,
@@ -39,23 +38,10 @@ export function createClientBridge(options: {
     }
   >();
 
-  let pendingQueueCoalescingTimerId: number;
   let flushQueueCoalescingTimerId: number;
 
-  function pushPendingQueue(payload: ClientPayloadNoCoalescingRequest) {
-    function act() {
-      _pendingCommandQueue.push(payload);
-    }
-    if (!requestCoalescing) {
-      act();
-    } else {
-      clearTimeout(pendingQueueCoalescingTimerId);
-      pendingQueueCoalescingTimerId = setTimeout(act, 0);
-    }
-  }
-
   function optimizeCommandQueue() {
-    if (_pendingCommandQueue.length <= 1) {
+    if (pendingCommandQueue.length <= 1) {
       // No commands or only one command. No
       // need to optimise
       return;
@@ -75,25 +61,27 @@ export function createClientBridge(options: {
       if (target) {
         // Optimise the pending command queue
         optimizeCommandQueue();
-        if (requestCoalescing) {
+        if (requestCoalescing && pendingCommandQueue.length > 1) {
           target.postMessage(
             JSON.stringify(
               serializer(
                 createPayload(RyderCommand.CoalesceRequestClient, {
-                  requests: _pendingCommandQueue,
+                  requests: pendingCommandQueue,
                 })
               )
             )
           );
+          // Clear `pendingCommandQueue` array in a mutable way
+          pendingCommandQueue.splice(0, pendingCommandQueue.length);
         } else {
           let payload: ClientPayload | undefined;
-          while ((payload = _pendingCommandQueue.shift())) {
+          while ((payload = pendingCommandQueue.shift())) {
             target.postMessage(JSON.stringify(serializer(payload)));
           }
         }
       } else {
         // Throw an error if the number of commands hit the upper limit
-        if (_pendingCommandQueue.length > MAX_QUEUED_COMMANDS) {
+        if (pendingCommandQueue.length > MAX_QUEUED_COMMANDS) {
           throw new Error(
             'Too many queued commands and no RyderServer found and connected.'
           );
@@ -185,6 +173,7 @@ export function createClientBridge(options: {
         case RyderCommand.CoalesceRequestServer: {
           const { responses } = payload;
           responses.forEach(p => processPayload(event, p));
+          break;
         }
         default:
           processPayload(event, payload);
@@ -203,7 +192,7 @@ export function createClientBridge(options: {
       });
       const { [RYDER_REQUEST_ID_FIELD]: requestId } = invokePayload;
       console.log(`[Invoke] Request Id: ${requestId}`);
-      pushPendingQueue(invokePayload);
+      pendingCommandQueue.push(invokePayload);
       return new Promise((resolve, reject) => {
         invokeRequestIdPromiseMap.set(requestId, { resolve, reject });
         flushPendingCommandQueue();
@@ -216,7 +205,7 @@ export function createClientBridge(options: {
       const { [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId } =
         subscribePayload;
       subscriptionRequestIdMap.set(subscriptionRequestId, onChange);
-      pushPendingQueue(subscribePayload);
+      pendingCommandQueue.push(subscribePayload);
       flushPendingCommandQueue();
       return () => {
         const unsubscribePayload = createPayload(
@@ -226,7 +215,7 @@ export function createClientBridge(options: {
             propertyPath,
           }
         );
-        pushPendingQueue(unsubscribePayload);
+        pendingCommandQueue.push(unsubscribePayload);
         flushPendingCommandQueue();
         subscriptionRequestIdMap.delete(subscriptionRequestId);
       };
