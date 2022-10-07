@@ -1,6 +1,6 @@
 # Ryder
 
-A Remote Procedure Call & Subscription Utility based on `MessageEventSource` (a.k.a `postMessage`)
+A Remote Procedure Call & Subscription Utility via `MessageEventSource` (a.k.a `postMessage`)
 
 ## The name
 

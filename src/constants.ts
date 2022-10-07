@@ -1,5 +1,8 @@
 /* @internal */
 export const enum RyderCommand {
+  CoalesceRequestClient,
+  CoalesceRequestServerSuccess,
+  CoalesceRequestServerError,
   DiscoveryServer,
   InvokeClient,
   InvokeServerSuccess,
@@ -18,6 +21,7 @@ export const RyderClientCommands = [
   RyderCommand.InvokeClient,
   RyderCommand.SubscribeClient,
   RyderCommand.UnsubscribeClient,
+  RyderCommand.CoalesceRequestClient,
 ];
 
 /* @internal */
@@ -30,9 +34,13 @@ export const RyderServerCommands = [
   RyderCommand.UnsubscribeServerSuccess,
   RyderCommand.UnsubscribeServerError,
   RyderCommand.DiscoveryServer,
+  RyderCommand.CoalesceRequestServerSuccess,
+  RyderCommand.CoalesceRequestServerError,
 ];
 
 /* @internal */
 export const RYDER_COMMAND_FIELD = '_RYDER_COMMAND';
 /* @internal */
 export const RYDER_REQUEST_ID_FIELD = '_RYDER_REQUEST_ID';
+/* @internal */
+export const RYDER_VERSION_FIELD = '_RYDER_VERSION';

@@ -1,7 +1,7 @@
 {
   "name": "ryder",
-  "version": "0.1.0",
-  "description": "Remote Procedure Call & Subscription using `postMessage`",
+  "version": "0.2.0",
+  "description": "Remote Procedure Call & Subscription via `postMessage`",
   "module": "lib/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
