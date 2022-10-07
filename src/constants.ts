@@ -1,8 +1,7 @@
 /* @internal */
 export const enum RyderCommand {
   CoalesceRequestClient,
-  CoalesceRequestServerSuccess,
-  CoalesceRequestServerError,
+  CoalesceRequestServer,
   DiscoveryServer,
   InvokeClient,
   InvokeServerSuccess,
@@ -34,8 +33,7 @@ export const RyderServerCommands = [
   RyderCommand.UnsubscribeServerSuccess,
   RyderCommand.UnsubscribeServerError,
   RyderCommand.DiscoveryServer,
-  RyderCommand.CoalesceRequestServerSuccess,
-  RyderCommand.CoalesceRequestServerError,
+  RyderCommand.CoalesceRequestServer,
 ];
 
 /* @internal */
