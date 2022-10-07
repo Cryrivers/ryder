@@ -135,8 +135,17 @@ function isRyderPayload(
     typeof payload === 'object' &&
     payload !== null &&
     RYDER_COMMAND_FIELD in payload &&
-    RYDER_REQUEST_ID_FIELD in payload
+    RYDER_REQUEST_ID_FIELD in payload &&
+    RYDER_VERSION_FIELD in payload
   );
+}
+
+function matchVersion(version: string) {
+  const match = version === '0.2.0';
+  if (!match) {
+    console.log(`Mismatched Ryder Versions ${version}. Expected 0.0.2.`);
+  }
+  return match;
 }
 
 export function isRyderClientPayload(

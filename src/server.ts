@@ -11,6 +11,10 @@ import {
   noProcessing,
 } from './utils';
 
+function nonEmpty<T>(item: T | undefined): item is T {
+  return item !== undefined;
+}
+
 export function createServerBridge(options: {
   serializer?: (value: unknown) => unknown;
   deserializer?: (value: unknown) => unknown;
@@ -42,7 +46,8 @@ export function createServerBridge(options: {
 
   async function processPayload(
     source: MessageEventSource,
-    payload: ClientPayload
+    payload: ClientPayload,
+    requestCoalescing: boolean
   ) {
     switch (payload[RYDER_COMMAND_FIELD]) {
       case RyderCommand.InvokeClient: {
@@ -50,33 +55,31 @@ export function createServerBridge(options: {
         const requestId = payload[RYDER_REQUEST_ID_FIELD];
         try {
           const value = await invokeHandler(propertyPath, args);
-          console.log(`[InvokeSuccess]: ${requestId}`);
-          source.postMessage(
-            JSON.stringify(
-              serializer(
-                createPayload(
-                  RyderCommand.InvokeServerSuccess,
-                  {
-                    value,
-                  },
-                  requestId
-                )
-              )
-            )
+          const reponsePayload = createPayload(
+            RyderCommand.InvokeServerSuccess,
+            {
+              value,
+            },
+            requestId
           );
+          console.log(`[InvokeSuccess]: ${requestId}`);
+          if (requestCoalescing) {
+            return reponsePayload;
+          } else {
+            source.postMessage(JSON.stringify(serializer(reponsePayload)));
+          }
         } catch (ex) {
           const reason = ex instanceof Error ? ex.message : String(ex);
-          source.postMessage(
-            JSON.stringify(
-              serializer(
-                createPayload(
-                  RyderCommand.InvokeServerError,
-                  { reason },
-                  requestId
-                )
-              )
-            )
+          const responsePayload = createPayload(
+            RyderCommand.InvokeServerError,
+            { reason },
+            requestId
           );
+          if (requestCoalescing) {
+            return responsePayload;
+          } else {
+            source.postMessage(JSON.stringify(serializer(responsePayload)));
+          }
         }
         break;
       }
@@ -120,17 +123,16 @@ export function createServerBridge(options: {
             listeners: [{ source, subscriptionRequestId: clientRequestId }],
           });
         }
-        source.postMessage(
-          JSON.stringify(
-            serializer(
-              createPayload(
-                RyderCommand.SubscribeServerSuccess,
-                {},
-                clientRequestId
-              )
-            )
-          )
+        const responsePayload = createPayload(
+          RyderCommand.SubscribeServerSuccess,
+          {},
+          clientRequestId
         );
+        if (requestCoalescing) {
+          return responsePayload;
+        } else {
+          source.postMessage(JSON.stringify(serializer(responsePayload)));
+        }
         break;
       }
       case RyderCommand.UnsubscribeClient: {
@@ -139,23 +141,25 @@ export function createServerBridge(options: {
         const sub = subscriptionManager.get(subscriptionKey);
 
         if (sub) {
+          const responsePayload = createPayload(
+            RyderCommand.UnsubscribeServerSuccess,
+            {},
+            payload[RYDER_REQUEST_ID_FIELD]
+          );
+
           if (sub.listeners.length === 1) {
             const unsubscribe = sub.unsubscribe;
             const listener = sub.listeners[0];
             if (listener.subscriptionRequestId === subscriptionRequestId) {
               unsubscribe();
               subscriptionManager.delete(subscriptionKey);
-              listener.source.postMessage(
-                JSON.stringify(
-                  serializer(
-                    createPayload(
-                      RyderCommand.UnsubscribeServerSuccess,
-                      {},
-                      payload[RYDER_REQUEST_ID_FIELD]
-                    )
-                  )
-                )
-              );
+              if (requestCoalescing) {
+                return responsePayload;
+              } else {
+                listener.source.postMessage(
+                  JSON.stringify(serializer(responsePayload))
+                );
+              }
             } else {
               // Unable to get `source`
               // UnsubscribeError
@@ -169,17 +173,13 @@ export function createServerBridge(options: {
                 item => item !== itemToBeRemoved
               );
               // UnsubscribeSuccess
-              itemToBeRemoved.source.postMessage(
-                JSON.stringify(
-                  serializer(
-                    createPayload(
-                      RyderCommand.UnsubscribeServerSuccess,
-                      {},
-                      payload[RYDER_REQUEST_ID_FIELD]
-                    )
-                  )
-                )
-              );
+              if (requestCoalescing) {
+                return responsePayload;
+              } else {
+                itemToBeRemoved.source.postMessage(
+                  JSON.stringify(serializer(responsePayload))
+                );
+              }
             } else {
               // Unable to get `source`
               //UnsubscribeError
@@ -207,10 +207,28 @@ export function createServerBridge(options: {
       console.log(`[RyderServer] Payload:`, payload);
       switch (payload[RYDER_COMMAND_FIELD]) {
         case RyderCommand.CoalesceRequestClient: {
-          throw new Error('No yet implemented yet.');
+          const { requests, [RYDER_REQUEST_ID_FIELD]: requestId } = payload;
+
+          const responses = (
+            await Promise.all(
+              requests.map(payload => processPayload(source, payload, true))
+            )
+          ).filter(nonEmpty);
+
+          source.postMessage(
+            JSON.stringify(
+              serializer(
+                createPayload(
+                  RyderCommand.CoalesceRequestServer,
+                  { responses },
+                  requestId
+                )
+              )
+            )
+          );
         }
         default:
-          await processPayload(source, payload);
+          await processPayload(source, payload, false);
       }
     } else {
       // Ignore this message
