@@ -51,8 +51,11 @@ export function createServerBridge(options: {
   ) {
     switch (payload[RYDER_COMMAND_FIELD]) {
       case RyderCommand.InvokeClient: {
-        const { propertyPath, args } = payload;
-        const requestId = payload[RYDER_REQUEST_ID_FIELD];
+        const {
+          propertyPath,
+          args,
+          [RYDER_REQUEST_ID_FIELD]: requestId,
+        } = payload;
         try {
           const value = await invokeHandler(propertyPath, args);
           const reponsePayload = createPayload(

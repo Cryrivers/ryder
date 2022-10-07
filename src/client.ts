@@ -109,6 +109,7 @@ export function createClientBridge(options: {
   }
 
   function processPayload(event: MessageEvent<string>, payload: ServerPayload) {
+    const { [RYDER_REQUEST_ID_FIELD]: clientRequestId } = payload;
     switch (payload[RYDER_COMMAND_FIELD]) {
       case RyderCommand.DiscoveryServer: {
         if (serverFinder) {
@@ -121,30 +122,26 @@ export function createClientBridge(options: {
         break;
       }
       case RyderCommand.InvokeServerSuccess: {
-        const promiseHandler = invokeRequestIdPromiseMap.get(
-          payload[RYDER_REQUEST_ID_FIELD]
-        );
+        const promiseHandler = invokeRequestIdPromiseMap.get(clientRequestId);
         if (promiseHandler) {
           promiseHandler.resolve(payload.value);
-          invokeRequestIdPromiseMap.delete(payload[RYDER_REQUEST_ID_FIELD]);
+          invokeRequestIdPromiseMap.delete(clientRequestId);
         } else {
           throw new Error(
-            `Unable to find handler for request id: ${payload[RYDER_REQUEST_ID_FIELD]}`
+            `Unable to find handler for request id: ${clientRequestId}`
           );
         }
 
         break;
       }
       case RyderCommand.InvokeServerError: {
-        const promiseHandler = invokeRequestIdPromiseMap.get(
-          payload[RYDER_REQUEST_ID_FIELD]
-        );
+        const promiseHandler = invokeRequestIdPromiseMap.get(clientRequestId);
         if (promiseHandler) {
           promiseHandler.reject(payload.reason);
-          invokeRequestIdPromiseMap.delete(payload[RYDER_REQUEST_ID_FIELD]);
+          invokeRequestIdPromiseMap.delete(clientRequestId);
         } else {
           throw new Error(
-            `Unable to find handler for request id: ${payload[RYDER_REQUEST_ID_FIELD]}`
+            `Unable to find handler for request id: ${clientRequestId}`
           );
         }
         break;
@@ -204,7 +201,7 @@ export function createClientBridge(options: {
         propertyPath,
         args,
       });
-      const requestId = invokePayload[RYDER_REQUEST_ID_FIELD];
+      const { [RYDER_REQUEST_ID_FIELD]: requestId } = invokePayload;
       console.log(`[Invoke] Request Id: ${requestId}`);
       pushPendingQueue(invokePayload);
       return new Promise((resolve, reject) => {
@@ -216,7 +213,8 @@ export function createClientBridge(options: {
       const subscribePayload = createPayload(RyderCommand.SubscribeClient, {
         propertyPath,
       });
-      const subscriptionRequestId = subscribePayload[RYDER_REQUEST_ID_FIELD];
+      const { [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId } =
+        subscribePayload;
       subscriptionRequestIdMap.set(subscriptionRequestId, onChange);
       pushPendingQueue(subscribePayload);
       flushPendingCommandQueue();
