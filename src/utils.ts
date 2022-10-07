@@ -153,7 +153,8 @@ export function isRyderClientPayload(
 ): payload is ClientPayload {
   return (
     isRyderPayload(payload) &&
-    RyderClientCommands.includes(payload[RYDER_COMMAND_FIELD])
+    RyderClientCommands.includes(payload[RYDER_COMMAND_FIELD]) &&
+    matchVersion(payload[RYDER_VERSION_FIELD])
   );
 }
 
@@ -162,7 +163,8 @@ export function isRyderServerPayload(
 ): payload is ServerPayload {
   return (
     isRyderPayload(payload) &&
-    RyderServerCommands.includes(payload[RYDER_COMMAND_FIELD])
+    RyderServerCommands.includes(payload[RYDER_COMMAND_FIELD]) &&
+    matchVersion(payload[RYDER_VERSION_FIELD])
   );
 }
 
