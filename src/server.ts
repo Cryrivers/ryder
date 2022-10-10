@@ -16,21 +16,52 @@ function nonEmpty<T>(item: T | undefined): item is T {
   return item !== undefined;
 }
 
-export function createServerBridge(options: {
+interface ServerBridgeOptions {
+  /**
+   * Handler for client calling `invoke` to execute a function, or get data.
+   *
+   * @param  {PropertyKey[]} propertyPath
+   * @returns {unknown} the function to invoked or the data to read
+   */
+  invokeHandler: (propertyPath: PropertyKey[]) => unknown;
+  /**
+   * Handler for client calling `subscribe` to subscribe a data source.
+   * Multiple subscription request of the same property key will not duplicated
+   * subscription to the data source.
+   *
+   * @param  {PropertyKey[]} propertyPath the identifier of the data source to subscribe
+   * @param  {(value:unknown) => void} onValueChange callback for data source updating the value
+   * @returns {() => void} Unsubscribe function
+   */
+  subscriptionHandler: (
+    propertyPath: PropertyKey[],
+    onValueChange: (value: unknown) => void
+  ) => () => void;
+  /**
+   * Custom JSON Serializer for custom objects.
+   * The client and server should have the same serializer in order to communicate properly.
+   */
   serializer?: (value: unknown) => unknown;
+  /**
+   * Custom JSON Deserializer for custom objects
+   * The client and server should have the same deserializer in order to communicate properly.
+   */
   deserializer?: (value: unknown) => unknown;
+  /**
+   * Retry on error of `invokeHandler` and `subscriptionHandler`
+   * by setting retry interval and limit of numbers
+   *
+   * @default false
+   */
   retryOnError?:
     | false
     | {
         interval: number;
         limit: number;
       };
-  invokeHandler: (propertyPath: PropertyKey[]) => unknown;
-  subscriptionHandler: (
-    propertyPath: PropertyKey[],
-    onValueChange: (value: unknown) => void
-  ) => () => void;
-}) {
+}
+
+export function createServerBridge(options: ServerBridgeOptions) {
   const {
     serializer = noProcessing,
     deserializer = noProcessing,

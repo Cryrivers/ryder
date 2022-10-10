@@ -14,15 +14,33 @@ import {
 
 const MAX_QUEUED_COMMANDS = 100;
 
-export function createClientBridge(options: {
-  serverFinder: (() => MessageEventSource | null) | false; // Passive Mode if false
+interface ClientBridgeOptions {
+  /**
+   * The callback function to provide a Ryder Server to connect.
+   */
+  serverFinder: (() => MessageEventSource | null) | false;
+  /**
+   * Indicates if Ryder coalesces multiple requests into one if possible. coalesced requests reduce
+   * the number of `postMessage` calls, and guarantee the execution order without `await` if no data access needed
+   * @default true
+   */
   requestCoalescing?: boolean;
+  /**
+   * Custom JSON Serializer for custom objects.
+   * The client and server should have the same serializer in order to communicate properly.
+   */
   serializer?: (value: unknown) => unknown;
+  /**
+   * Custom JSON Deserializer for custom objects
+   * The client and server should have the same deserializer in order to communicate properly.
+   */
   deserializer?: (value: unknown) => unknown;
-}) {
+}
+
+export function createClientBridge(options: ClientBridgeOptions) {
   const {
     serverFinder,
-    requestCoalescing = false,
+    requestCoalescing = true,
     serializer = noProcessing,
     deserializer = noProcessing,
   } = options;

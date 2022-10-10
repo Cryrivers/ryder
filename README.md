@@ -24,7 +24,7 @@ Other message event sources like `WebSocket`, WebRTC and Server-sent events coul
 | A **web page** executes functions, accesses or subscribes data from **another web server**                                | `WebSocket`(with `postMessage` wrapper)       | `WebSocket` (with `postMessage` wrapper)      |
 | A **web page** executes functions, accesses or subscribes data from **another peer** (WebRTC, peer-to-peer communication) | `RTCDataChannel` (with `postMessage` wrapper) | `RTCDataChannel` (with `postMessage` wrapper) |
 
-##### Reference Implementation of WebSocket `postMessage` wrapper
+##### Reference implementation of WebSocket `postMessage` wrapper
 
 ```js
 class RyderWebSocket extends WebSocket {
