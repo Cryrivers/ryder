@@ -171,3 +171,31 @@ export function isRyderServerPayload(
 export function noProcessing<T>(value: T) {
   return value;
 }
+
+function timeout(timeout: number) {
+  return new Promise(resolve => {
+    setTimeout(resolve, timeout);
+  });
+}
+
+export async function retry<T>(
+  action: () => T,
+  retryLimit: number,
+  retryTimeout: number
+) {
+  let tryCount = 0;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      return await action();
+    } catch (ex) {
+      tryCount++;
+      if (tryCount > retryLimit) {
+        throw ex;
+      } else {
+        await timeout(retryTimeout);
+      }
+    }
+  }
+}

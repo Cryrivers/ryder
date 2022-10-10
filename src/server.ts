@@ -9,6 +9,7 @@ import {
   generateSubscriptionKey,
   isRyderClientPayload,
   noProcessing,
+  retry,
 } from './utils';
 
 function nonEmpty<T>(item: T | undefined): item is T {
@@ -18,20 +19,24 @@ function nonEmpty<T>(item: T | undefined): item is T {
 export function createServerBridge(options: {
   serializer?: (value: unknown) => unknown;
   deserializer?: (value: unknown) => unknown;
-  invokeHandler: (
-    propertyPath: PropertyKey[],
-    args: unknown[]
-  ) => Promise<unknown>;
+  retryOnError?:
+    | false
+    | {
+        interval: number;
+        limit: number;
+      };
+  invokeHandler: (propertyPath: PropertyKey[]) => unknown;
   subscriptionHandler: (
     propertyPath: PropertyKey[],
     onValueChange: (value: unknown) => void
-  ) => (() => void) | Promise<() => void>;
+  ) => () => void;
 }) {
   const {
     serializer = noProcessing,
     deserializer = noProcessing,
     invokeHandler,
     subscriptionHandler,
+    retryOnError = false,
   } = options;
   const subscriptionManager = new Map<
     string,
@@ -57,7 +62,16 @@ export function createServerBridge(options: {
           [RYDER_REQUEST_ID_FIELD]: requestId,
         } = payload;
         try {
-          const value = await invokeHandler(propertyPath, args);
+          const act = () => invokeHandler(propertyPath);
+          const targetVariable = retryOnError
+            ? await retry(act, retryOnError.limit, retryOnError.interval)
+            : act;
+
+          const value =
+            typeof targetVariable === 'function'
+              ? await targetVariable(...args)
+              : targetVariable;
+
           const reponsePayload = createPayload(
             RyderCommand.InvokeServerSuccess,
             {
@@ -97,30 +111,35 @@ export function createServerBridge(options: {
             subscriptionRequestId: clientRequestId,
           });
         } else {
-          const unsubscribe = await subscriptionHandler(propertyPath, value => {
-            // Send the value changes to all listeners
-            const sub = subscriptionManager.get(subscriptionKey);
-            if (sub) {
-              sub.listeners.forEach(({ source, subscriptionRequestId }) =>
-                source.postMessage(
-                  JSON.stringify(
-                    serializer(
-                      createPayload(
-                        RyderCommand.SubscribeServerUpdate,
-                        {
-                          value,
-                        },
-                        subscriptionRequestId
+          const act = () =>
+            subscriptionHandler(propertyPath, value => {
+              // Send the value changes to all listeners
+              const sub = subscriptionManager.get(subscriptionKey);
+              if (sub) {
+                sub.listeners.forEach(({ source, subscriptionRequestId }) =>
+                  source.postMessage(
+                    JSON.stringify(
+                      serializer(
+                        createPayload(
+                          RyderCommand.SubscribeServerUpdate,
+                          {
+                            value,
+                          },
+                          subscriptionRequestId
+                        )
                       )
                     )
                   )
-                )
-              );
-            } else {
-              // Potential Memory Leaking
-              // need to log the error
-            }
-          });
+                );
+              } else {
+                // Potential Memory Leaking
+                // need to log the error
+              }
+            });
+
+          const unsubscribe = retryOnError
+            ? await retry(act, retryOnError.limit, retryOnError.interval)
+            : act();
           subscriptionManager.set(subscriptionKey, {
             unsubscribe,
             listeners: [{ source, subscriptionRequestId: clientRequestId }],
