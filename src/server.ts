@@ -3,6 +3,7 @@ import {
   RYDER_COMMAND_FIELD,
   RYDER_REQUEST_ID_FIELD,
 } from './constants';
+import type { MessageSource } from './typings';
 import {
   ClientPayload,
   createPayload,
@@ -74,14 +75,14 @@ export function createServerBridge(options: ServerBridgeOptions) {
     {
       unsubscribe: () => void;
       listeners: {
-        source: MessageEventSource;
+        source: MessageSource;
         subscriptionRequestId: string;
       }[];
     }
   >();
 
   async function processPayload(
-    source: MessageEventSource,
+    source: MessageSource,
     payload: ClientPayload,
     requestCoalescing: boolean
   ) {
@@ -290,7 +291,7 @@ export function createServerBridge(options: ServerBridgeOptions) {
   }
 
   return {
-    sendDiscoveryMessage: (sources: MessageEventSource[]) => {
+    sendDiscoveryMessage: (sources: MessageSource[]) => {
       sources.forEach(source =>
         source.postMessage(
           JSON.stringify(

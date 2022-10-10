@@ -3,6 +3,7 @@ import {
   RYDER_REQUEST_ID_FIELD,
   RyderCommand,
 } from './constants';
+import type { MessageSource } from './typings';
 import {
   isRyderServerPayload,
   noProcessing,
@@ -18,7 +19,7 @@ interface ClientBridgeOptions {
   /**
    * The callback function to provide a Ryder Server to connect.
    */
-  serverFinder: (() => MessageEventSource | null) | false;
+  serverFinder: (() => MessageSource | null) | false;
   /**
    * Indicates if Ryder coalesces multiple requests into one if possible. coalesced requests reduce
    * the number of `postMessage` calls, and guarantee the execution order without `await` if no data access needed
@@ -45,7 +46,8 @@ export function createClientBridge(options: ClientBridgeOptions) {
     deserializer = noProcessing,
   } = options;
 
-  let target: MessageEventSource | null = null;
+  let target: MessageSource | null = null;
+
   const pendingCommandQueue: ClientPayloadNoCoalescingRequest[] = [];
   const subscriptionRequestIdMap = new Map<string, (value: unknown) => void>();
   const invokeRequestIdPromiseMap = new Map<
