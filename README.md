@@ -14,7 +14,7 @@ Ryder supports any message event sources that implements `postMessage` and `mess
 
 Other message event sources like `WebSocket`, WebRTC and Server-sent events could be supported with `postMessage` implemented by users.
 
-### Robust Connction
+### Robust Connection
 
 #### Use Case
 
