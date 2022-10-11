@@ -14,6 +14,8 @@ Ryder supports any message event sources that implements `postMessage` and `mess
 
 Other message event sources like `WebSocket`, WebRTC and Server-sent events could be supported with `postMessage` implemented by users.
 
+### Robust Connction
+
 #### Use Case
 
 |                                                                                                                           | Client                                        | Server                                                     |
@@ -68,6 +70,11 @@ const subscriptionMap = {
 };
 
 const { messageHandler } = createServerBridge({
+  /**
+   * Handler for client calling `subscribe` to subscribe a data source.
+   * Multiple subscription request of the same property key will not have
+   * duplicated subscription to the data source.
+   */
   subscriptionHandler: (
     propertyPath: string[],
     onValueChange: (value: unknown) => void
@@ -77,6 +84,9 @@ const { messageHandler } = createServerBridge({
     );
     return unsubscribe;
   },
+  /**
+   * Handler for client calling `invoke` to execute a function, or get data.
+   */
   invokeHandler: (propertyPath: PropertyKey[]) => rpcMap[propertyPath[0]],
 });
 ```
@@ -85,7 +95,14 @@ const { messageHandler } = createServerBridge({
 
 ```ts
 const bridge = createClientBridge({
+  /**
+   * The callback function to provide a Ryder Server to connect.
+   */
   serverFinder,
+  /**
+   * Indicates if Ryder coalesces multiple requests into one if possible. coalesced requests reduce
+   * the number of `postMessage` calls, and guarantee the execution order without `await` if no data access needed
+   */
   requestCoalescing: true,
 });
 

@@ -27,8 +27,8 @@ interface ServerBridgeOptions {
   invokeHandler: (propertyPath: PropertyKey[]) => unknown;
   /**
    * Handler for client calling `subscribe` to subscribe a data source.
-   * Multiple subscription request of the same property key will not duplicated
-   * subscription to the data source.
+   * Multiple subscription request of the same property key will not have
+   * duplicated subscription to the data source.
    *
    * @param  {PropertyKey[]} propertyPath the identifier of the data source to subscribe
    * @param  {(value:unknown) => void} onValueChange callback for data source updating the value
