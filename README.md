@@ -16,13 +16,13 @@ Other message event sources like `WebSocket`, WebRTC and Server-sent events coul
 
 #### Use Case
 
-|                                                                                                                           | Client                                        | Server                                        |
-| ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------- |
-| An **iframe** executes functions, accesses or subscribes data in another **iframe**                                       | `window`(of an iframe)                        | `window`(of another iframe)                   |
-| A **web page** executes functions, accesses or subscribes data in `WebWorker` or `ServiceWorker`                          | `window`                                      | `WebWorker` or `ServiceWorker`                |
-| A **NodeJS** module executes functions, accesses or subscribes data in `node:worker_threads`                              | `node:worker_threads` (`parentPort`)          | `node:worker_threads`                         |
-| A **web page** executes functions, accesses or subscribes data from **another web server**                                | `WebSocket`(with `postMessage` wrapper)       | `WebSocket` (with `postMessage` wrapper)      |
-| A **web page** executes functions, accesses or subscribes data from **another peer** (WebRTC, peer-to-peer communication) | `RTCDataChannel` (with `postMessage` wrapper) | `RTCDataChannel` (with `postMessage` wrapper) |
+|                                                                                                                           | Client                                        | Server                                                     |
+| ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------- |
+| An **iframe** executes functions, accesses or subscribes data in another **iframe**                                       | `window`(of an iframe)                        | `window`(of another iframe)                                |
+| A **web page** executes functions, accesses or subscribes data in `WebWorker` or `ServiceWorker`                          | `window`                                      | `WebWorker` or `ServiceWorker`                             |
+| A **NodeJS** module executes functions, accesses or subscribes data in `node:worker_threads`                              | `node:worker_threads` (`parentPort`)          | `node:worker_threads`                                      |
+| A **web page** executes functions, accesses or subscribes data from **another web server**                                | `WebSocket`(with `postMessage` wrapper)       | `WebSocket` (with `postMessage` wrapper, via `ws` package) |
+| A **web page** executes functions, accesses or subscribes data from **another peer** (WebRTC, peer-to-peer communication) | `RTCDataChannel` (with `postMessage` wrapper) | `RTCDataChannel` (with `postMessage` wrapper)              |
 
 ##### Reference implementation of WebSocket `postMessage` wrapper
 
