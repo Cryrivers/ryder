@@ -16,12 +16,26 @@ import {
 
 const MAX_QUEUED_COMMANDS = 100;
 
+function noHandlerForRequestIdWarning(requestId: string, namespace: string) {
+  const messageNoNS =
+    `Unable to find a handler for request id: ${requestId}.` +
+    ' This is likely due to multiple Ryder clients handling messages from the same Ryder server, or duplicated handler for `message` event. ' +
+    ' If your project is only using one Ryder client, please check the code around `addEventListener`. ' +
+    'Otherwise, please use `namespace` option in `createClientBridge`.';
+  const messageWithNS = `Unable to find a handler for request id: "${requestId}", in namespace "${namespace}".`;
+  console.warn(namespace === '' ? messageNoNS : messageWithNS);
+}
+
 interface ClientBridgeOptions {
   /**
    * The callback function to provide a Ryder Server to connect.
    */
   serverFinder: (() => MessageSource | null) | false;
   /**
+   * Ryder clients only process messages from the same namespace.
+   * If there are multiple Ryder clients handling messages from the same Ryder server.
+   * A namespace needs to be assigned so Ryder clients only handle messages for itself,
+   * discarding messages for other clients.
    *
    * @default ""
    */
@@ -148,9 +162,7 @@ export function createClientBridge(options: ClientBridgeOptions) {
           promiseHandler.resolve(payload.value);
           invokeRequestIdPromiseMap.delete(clientRequestId);
         } else {
-          throw new Error(
-            `Unable to find handler for request id: ${clientRequestId}`
-          );
+          noHandlerForRequestIdWarning(clientRequestId, namespace);
         }
 
         break;
@@ -161,9 +173,7 @@ export function createClientBridge(options: ClientBridgeOptions) {
           promiseHandler.reject(payload.reason);
           invokeRequestIdPromiseMap.delete(clientRequestId);
         } else {
-          throw new Error(
-            `Unable to find handler for request id: ${clientRequestId}`
-          );
+          noHandlerForRequestIdWarning(clientRequestId, namespace);
         }
         break;
       }
