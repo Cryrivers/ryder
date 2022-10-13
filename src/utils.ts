@@ -6,12 +6,15 @@ import {
   RYDER_VERSION_FIELD,
   RyderClientCommands,
   RyderServerCommands,
+  PROTOCOL_VERSION,
+  RYDER_NAMESPACE_FIELD,
 } from './constants';
 
 interface RyderPayloadCommonFields {
   [RYDER_COMMAND_FIELD]: RyderCommand;
   [RYDER_REQUEST_ID_FIELD]: string;
-  [RYDER_VERSION_FIELD]: string;
+  [RYDER_VERSION_FIELD]: number;
+  [RYDER_NAMESPACE_FIELD]: string;
 }
 
 interface InvokeClientPayload extends RyderPayloadCommonFields {
@@ -106,6 +109,7 @@ const generateRequestId = () => nanoid(10);
 
 export function createPayload<T extends RyderCommand>(
   command: T,
+  namespace: string,
   payload: Omit<
     Extract<ClientPayload | ServerPayload, { [RYDER_COMMAND_FIELD]: T }>,
     keyof RyderPayloadCommonFields
@@ -113,11 +117,11 @@ export function createPayload<T extends RyderCommand>(
   requestId?: string
 ) {
   const _requestId = requestId || generateRequestId();
-  const version = '0.2.0';
   return {
     [RYDER_COMMAND_FIELD]: command,
     [RYDER_REQUEST_ID_FIELD]: _requestId,
-    [RYDER_VERSION_FIELD]: version,
+    [RYDER_VERSION_FIELD]: PROTOCOL_VERSION,
+    [RYDER_NAMESPACE_FIELD]: namespace,
     ...payload,
   } as Extract<ClientPayload | ServerPayload, { [RYDER_COMMAND_FIELD]: T }>;
 }
@@ -136,14 +140,17 @@ function isRyderPayload(
     payload !== null &&
     RYDER_COMMAND_FIELD in payload &&
     RYDER_REQUEST_ID_FIELD in payload &&
-    RYDER_VERSION_FIELD in payload
+    RYDER_VERSION_FIELD in payload &&
+    RYDER_NAMESPACE_FIELD in payload
   );
 }
 
-function matchVersion(version: string) {
-  const match = version === '0.2.0';
+function matchVersion(version: number) {
+  const match = version === PROTOCOL_VERSION;
   if (!match) {
-    console.log(`Mismatched Ryder Versions ${version}. Expected 0.0.2.`);
+    console.log(
+      `Mismatched Ryder Protocol Version ${version}. Expected 0.0.2.`
+    );
   }
   return match;
 }
@@ -165,6 +172,13 @@ export function isRyderServerPayload(
     isRyderPayload(payload) &&
     RyderServerCommands.includes(payload[RYDER_COMMAND_FIELD]) &&
     matchVersion(payload[RYDER_VERSION_FIELD])
+  );
+}
+
+export function isTargetNamespace(payload: ServerPayload, namespace: string) {
+  return (
+    payload[RYDER_NAMESPACE_FIELD] === namespace ||
+    payload[RYDER_NAMESPACE_FIELD] === '*'
   );
 }
 

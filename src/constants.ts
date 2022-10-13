@@ -1,3 +1,10 @@
+/**
+ * @internal
+ * Do increase the number if RyderCommand changed
+ * or the following payload spec has breaking changes
+ */
+export const PROTOCOL_VERSION = 0;
+
 /* @internal */
 export const enum RyderCommand {
   CoalesceRequestClient,
@@ -42,3 +49,5 @@ export const RYDER_COMMAND_FIELD = '_RYDER_COMMAND';
 export const RYDER_REQUEST_ID_FIELD = '_RYDER_REQUEST_ID';
 /* @internal */
 export const RYDER_VERSION_FIELD = '_RYDER_VERSION';
+/* @internal */
+export const RYDER_NAMESPACE_FIELD = '_RYDER_NAMESPACE';

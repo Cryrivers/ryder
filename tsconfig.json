@@ -13,7 +13,8 @@
     "importHelpers": true,
     "noEmitHelpers": true,
     "stripInternal": true,
-    "outDir": "lib"
+    "outDir": "lib",
+    "types": []
   },
   "include": ["./src"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/__tests__"]

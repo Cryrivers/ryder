@@ -11,6 +11,7 @@ import {
   type ClientPayload,
   type ClientPayloadNoCoalescingRequest,
   ServerPayload,
+  isTargetNamespace,
 } from './utils';
 
 const MAX_QUEUED_COMMANDS = 100;
@@ -20,6 +21,11 @@ interface ClientBridgeOptions {
    * The callback function to provide a Ryder Server to connect.
    */
   serverFinder: (() => MessageSource | null) | false;
+  /**
+   *
+   * @default ""
+   */
+  namespace?: string;
   /**
    * Indicates if Ryder coalesces multiple requests into one if possible. coalesced requests reduce
    * the number of `postMessage` calls, and guarantee the execution order without `await` if no data access needed
@@ -44,7 +50,14 @@ export function createClientBridge(options: ClientBridgeOptions) {
     requestCoalescing = true,
     serializer = noProcessing,
     deserializer = noProcessing,
+    namespace = '',
   } = options;
+
+  if (namespace === '*') {
+    throw new Error(
+      'Asterisk (*) is a wildcard character and matches all namespaces. Please use another name.'
+    );
+  }
 
   let target: MessageSource | null = null;
 
@@ -85,7 +98,7 @@ export function createClientBridge(options: ClientBridgeOptions) {
           target.postMessage(
             JSON.stringify(
               serializer(
-                createPayload(RyderCommand.CoalesceRequestClient, {
+                createPayload(RyderCommand.CoalesceRequestClient, namespace, {
                   requests: pendingCommandQueue,
                 })
               )
@@ -187,7 +200,10 @@ export function createClientBridge(options: ClientBridgeOptions) {
       // Unable to parse and deserialize the message. just ignore
       return;
     }
-    if (isRyderServerPayload(payload)) {
+    if (
+      isRyderServerPayload(payload) &&
+      isTargetNamespace(payload, namespace)
+    ) {
       console.log(`[RyderClient] Payload:`, payload);
       switch (payload[RYDER_COMMAND_FIELD]) {
         case RyderCommand.CoalesceRequestServer: {
@@ -206,10 +222,14 @@ export function createClientBridge(options: ClientBridgeOptions) {
 
   return {
     invoke(propertyPath: PropertyKey[], ...args: unknown[]) {
-      const invokePayload = createPayload(RyderCommand.InvokeClient, {
-        propertyPath,
-        args,
-      });
+      const invokePayload = createPayload(
+        RyderCommand.InvokeClient,
+        namespace,
+        {
+          propertyPath,
+          args,
+        }
+      );
       const { [RYDER_REQUEST_ID_FIELD]: requestId } = invokePayload;
       console.log(`[Invoke] Request Id: ${requestId}`);
       pendingCommandQueue.push(invokePayload);
@@ -219,9 +239,13 @@ export function createClientBridge(options: ClientBridgeOptions) {
       });
     },
     subscribe(propertyPath: PropertyKey[], onChange: (value: any) => void) {
-      const subscribePayload = createPayload(RyderCommand.SubscribeClient, {
-        propertyPath,
-      });
+      const subscribePayload = createPayload(
+        RyderCommand.SubscribeClient,
+        namespace,
+        {
+          propertyPath,
+        }
+      );
       const { [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId } =
         subscribePayload;
       subscriptionRequestIdMap.set(subscriptionRequestId, onChange);
@@ -230,6 +254,7 @@ export function createClientBridge(options: ClientBridgeOptions) {
       return () => {
         const unsubscribePayload = createPayload(
           RyderCommand.UnsubscribeClient,
+          namespace,
           {
             subscriptionRequestId,
             propertyPath,

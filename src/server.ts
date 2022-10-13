@@ -1,6 +1,7 @@
 import {
   RyderCommand,
   RYDER_COMMAND_FIELD,
+  RYDER_NAMESPACE_FIELD,
   RYDER_REQUEST_ID_FIELD,
 } from './constants';
 import type { MessageSource } from './typings';
@@ -76,6 +77,7 @@ export function createServerBridge(options: ServerBridgeOptions) {
       unsubscribe: () => void;
       listeners: {
         source: MessageSource;
+        namespace: string;
         subscriptionRequestId: string;
       }[];
     }
@@ -92,6 +94,7 @@ export function createServerBridge(options: ServerBridgeOptions) {
           propertyPath,
           args,
           [RYDER_REQUEST_ID_FIELD]: requestId,
+          [RYDER_NAMESPACE_FIELD]: namespace,
         } = payload;
         try {
           const act = () => invokeHandler(propertyPath);
@@ -106,6 +109,7 @@ export function createServerBridge(options: ServerBridgeOptions) {
 
           const reponsePayload = createPayload(
             RyderCommand.InvokeServerSuccess,
+            namespace,
             {
               value,
             },
@@ -121,6 +125,7 @@ export function createServerBridge(options: ServerBridgeOptions) {
           const reason = ex instanceof Error ? ex.message : String(ex);
           const responsePayload = createPayload(
             RyderCommand.InvokeServerError,
+            namespace,
             { reason },
             requestId
           );
@@ -133,13 +138,14 @@ export function createServerBridge(options: ServerBridgeOptions) {
         break;
       }
       case RyderCommand.SubscribeClient: {
-        const { propertyPath } = payload;
+        const { propertyPath, [RYDER_NAMESPACE_FIELD]: namespace } = payload;
         const subscriptionKey = generateSubscriptionKey(propertyPath);
         const sub = subscriptionManager.get(subscriptionKey);
         const clientRequestId = payload[RYDER_REQUEST_ID_FIELD];
         if (sub) {
           sub.listeners.push({
             source,
+            namespace,
             subscriptionRequestId: clientRequestId,
           });
         } else {
@@ -148,20 +154,22 @@ export function createServerBridge(options: ServerBridgeOptions) {
               // Send the value changes to all listeners
               const sub = subscriptionManager.get(subscriptionKey);
               if (sub) {
-                sub.listeners.forEach(({ source, subscriptionRequestId }) =>
-                  source.postMessage(
-                    JSON.stringify(
-                      serializer(
-                        createPayload(
-                          RyderCommand.SubscribeServerUpdate,
-                          {
-                            value,
-                          },
-                          subscriptionRequestId
+                sub.listeners.forEach(
+                  ({ source, namespace, subscriptionRequestId }) =>
+                    source.postMessage(
+                      JSON.stringify(
+                        serializer(
+                          createPayload(
+                            RyderCommand.SubscribeServerUpdate,
+                            namespace,
+                            {
+                              value,
+                            },
+                            subscriptionRequestId
+                          )
                         )
                       )
                     )
-                  )
                 );
               } else {
                 // Potential Memory Leaking
@@ -174,11 +182,14 @@ export function createServerBridge(options: ServerBridgeOptions) {
             : act();
           subscriptionManager.set(subscriptionKey, {
             unsubscribe,
-            listeners: [{ source, subscriptionRequestId: clientRequestId }],
+            listeners: [
+              { source, subscriptionRequestId: clientRequestId, namespace },
+            ],
           });
         }
         const responsePayload = createPayload(
           RyderCommand.SubscribeServerSuccess,
+          namespace,
           {},
           clientRequestId
         );
@@ -190,13 +201,18 @@ export function createServerBridge(options: ServerBridgeOptions) {
         break;
       }
       case RyderCommand.UnsubscribeClient: {
-        const { propertyPath, subscriptionRequestId } = payload;
+        const {
+          propertyPath,
+          subscriptionRequestId,
+          [RYDER_NAMESPACE_FIELD]: namespace,
+        } = payload;
         const subscriptionKey = generateSubscriptionKey(propertyPath);
         const sub = subscriptionManager.get(subscriptionKey);
 
         if (sub) {
           const responsePayload = createPayload(
             RyderCommand.UnsubscribeServerSuccess,
+            namespace,
             {},
             payload[RYDER_REQUEST_ID_FIELD]
           );
@@ -261,7 +277,11 @@ export function createServerBridge(options: ServerBridgeOptions) {
       console.log(`[RyderServer] Payload:`, payload);
       switch (payload[RYDER_COMMAND_FIELD]) {
         case RyderCommand.CoalesceRequestClient: {
-          const { requests, [RYDER_REQUEST_ID_FIELD]: requestId } = payload;
+          const {
+            requests,
+            [RYDER_REQUEST_ID_FIELD]: requestId,
+            [RYDER_NAMESPACE_FIELD]: namespace,
+          } = payload;
 
           const responses = (
             await Promise.all(
@@ -274,6 +294,7 @@ export function createServerBridge(options: ServerBridgeOptions) {
               serializer(
                 createPayload(
                   RyderCommand.CoalesceRequestServer,
+                  namespace,
                   { responses },
                   requestId
                 )
@@ -291,11 +312,13 @@ export function createServerBridge(options: ServerBridgeOptions) {
   }
 
   return {
-    sendDiscoveryMessage: (sources: MessageSource[]) => {
+    sendDiscoveryMessage: (sources: MessageSource[], namespace = '*') => {
       sources.forEach(source =>
         source.postMessage(
           JSON.stringify(
-            serializer(createPayload(RyderCommand.DiscoveryServer, {}))
+            serializer(
+              createPayload(RyderCommand.DiscoveryServer, namespace, {})
+            )
           )
         )
       );
