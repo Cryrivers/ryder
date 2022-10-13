@@ -1,6 +1,6 @@
 {
   "name": "ryder",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Remote Procedure Call & Subscription via `postMessage`",
   "module": "lib/index.js",
   "scripts": {

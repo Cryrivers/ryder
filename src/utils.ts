@@ -148,8 +148,8 @@ function isRyderPayload(
 function matchVersion(version: number) {
   const match = version === PROTOCOL_VERSION;
   if (!match) {
-    console.log(
-      `Mismatched Ryder Protocol Version ${version}. Expected 0.0.2.`
+    console.warn(
+      `Mismatched Ryder Protocol version ${version}. Expected version: ${PROTOCOL_VERSION}.`
     );
   }
   return match;
