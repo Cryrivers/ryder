@@ -1,75 +1,18 @@
-import {
-  RYDER_COMMAND_FIELD,
-  RyderCommand,
-  RYDER_REQUEST_ID_FIELD,
-} from './constants';
-
-interface RequestId {
-  [RYDER_REQUEST_ID_FIELD]: string;
+interface RyderMessageEvent {
+  /** Returns the data of the message. */
+  readonly data: string;
+  /** Returns the last event ID string, for server-sent events. */
+  readonly source: MessageEventSource | null;
 }
 
-export interface InvokeClientPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.InvokeClient;
-  propertyPath: PropertyKey[];
-  args: unknown[];
+export interface MessageSource {
+  addEventListener(
+    type: 'message',
+    listener: (ev: RyderMessageEvent) => any
+  ): void;
+  postMessage(message: string): void;
+  removeEventListener(
+    type: 'message',
+    listener: (ev: RyderMessageEvent) => any
+  ): void;
 }
-
-export interface InvokeServerSuccessPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.InvokeServerSuccess;
-  value: unknown;
-}
-
-export interface InvokeServerErrorPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.InvokeServerError;
-  reason: unknown;
-}
-
-export interface SubscribeClientPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.SubscribeClient;
-  propertyPath: PropertyKey[];
-}
-
-export interface SubscribeServerSuccessPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.SubscribeServerSuccess;
-}
-
-export interface SubscribeServerErrorPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.SubscribeServerError;
-}
-
-export interface SubscribeServerUpdatePayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.SubscribeServerUpdate;
-  value: unknown;
-}
-
-export interface UnsubscribeClientPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.UnsubscribeClient;
-  propertyPath: PropertyKey[];
-  subscriptionRequestId: string;
-}
-
-export interface UnsubscribeServerSuccessPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.UnsubscribeServerSuccess;
-}
-
-export interface UnsubscribeServerErrorPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.UnsubscribeServerError;
-}
-
-export interface DiscoveryServerPayload extends RequestId {
-  [RYDER_COMMAND_FIELD]: RyderCommand.DiscoveryServer;
-}
-
-export type ClientPayload =
-  | InvokeClientPayload
-  | SubscribeClientPayload
-  | UnsubscribeClientPayload;
-export type ServerPayload =
-  | InvokeServerErrorPayload
-  | InvokeServerSuccessPayload
-  | SubscribeServerSuccessPayload
-  | SubscribeServerErrorPayload
-  | SubscribeServerUpdatePayload
-  | UnsubscribeServerSuccessPayload
-  | UnsubscribeServerErrorPayload
-  | DiscoveryServerPayload;
