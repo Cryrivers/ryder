@@ -1,17 +1,14 @@
-import {
-  RYDER_COMMAND_FIELD,
-  RYDER_REQUEST_ID_FIELD,
-  RyderCommand,
-} from './constants';
+import { RYDER_COMMAND_FIELD, RYDER_REQUEST_ID_FIELD, RyderCommand } from './constants';
 import type { MessageSource } from './typings';
 import {
-  isRyderServerPayload,
-  noProcessing,
   createPayload,
+  defaultDeserializer,
+  defaultSerializer,
+  isRyderServerPayload,
+  isTargetNamespace,
+  ServerPayload,
   type ClientPayload,
   type ClientPayloadNoCoalescingRequest,
-  ServerPayload,
-  isTargetNamespace,
 } from './utils';
 
 const MAX_QUEUED_COMMANDS = 100;
@@ -50,27 +47,25 @@ interface ClientBridgeOptions {
    * Custom JSON Serializer for custom objects.
    * The client and server should have the same serializer in order to communicate properly.
    */
-  serializer?: (value: unknown) => unknown;
+  serializer?: (value: unknown) => string;
   /**
    * Custom JSON Deserializer for custom objects
    * The client and server should have the same deserializer in order to communicate properly.
    */
-  deserializer?: (value: unknown) => unknown;
+  deserializer?: (value: string) => unknown;
 }
 
 export function createClientBridge(options: ClientBridgeOptions) {
   const {
     serverFinder,
     requestCoalescing = true,
-    serializer = noProcessing,
-    deserializer = noProcessing,
+    serializer = defaultSerializer,
+    deserializer = defaultDeserializer,
     namespace = '',
   } = options;
 
   if (namespace === '*') {
-    throw new Error(
-      'Asterisk (*) is a wildcard character and matches all namespaces. Please use another name.'
-    );
+    throw new Error('Asterisk (*) is a wildcard character and matches all namespaces. Please use another name.');
   }
 
   let target: MessageSource | null = null;
@@ -110,13 +105,11 @@ export function createClientBridge(options: ClientBridgeOptions) {
         optimizeCommandQueue();
         if (requestCoalescing && pendingCommandQueue.length > 1) {
           target.postMessage(
-            JSON.stringify(
-              serializer(
-                createPayload(RyderCommand.CoalesceRequestClient, namespace, {
-                  requests: pendingCommandQueue,
-                })
-              )
-            )
+            serializer(
+              createPayload(RyderCommand.CoalesceRequestClient, namespace, {
+                requests: pendingCommandQueue,
+              }),
+            ),
           );
           // Clear `pendingCommandQueue` array in a mutable way
           pendingCommandQueue.splice(0, pendingCommandQueue.length);
@@ -129,9 +122,7 @@ export function createClientBridge(options: ClientBridgeOptions) {
       } else {
         // Throw an error if the number of commands hit the upper limit
         if (pendingCommandQueue.length > MAX_QUEUED_COMMANDS) {
-          throw new Error(
-            'Too many queued commands and no RyderServer found and connected.'
-          );
+          throw new Error('Too many queued commands and no RyderServer found and connected.');
         }
       }
     }
@@ -184,14 +175,13 @@ export function createClientBridge(options: ClientBridgeOptions) {
         break;
       }
       case RyderCommand.SubscribeServerUpdate: {
-        const { value, [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId } =
-          payload;
+        const { value, [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId } = payload;
         const callback = subscriptionRequestIdMap.get(subscriptionRequestId);
         if (callback) {
           callback(value);
         } else {
           throw new Error(
-            `Potential memory leaking at RyderServer. Subscription for ${subscriptionRequestId} doesn't exist.`
+            `Potential memory leaking at RyderServer. Subscription for ${subscriptionRequestId} doesn't exist.`,
           );
         }
         break;
@@ -205,20 +195,17 @@ export function createClientBridge(options: ClientBridgeOptions) {
     const { data } = event;
     let payload: unknown;
     try {
-      payload = deserializer(JSON.parse(data));
+      payload = deserializer(data);
     } catch {
       // Unable to parse and deserialize the message. just ignore
       return;
     }
-    if (
-      isRyderServerPayload(payload) &&
-      isTargetNamespace(payload, namespace)
-    ) {
+    if (isRyderServerPayload(payload) && isTargetNamespace(payload, namespace)) {
       console.log(`[RyderClient] Payload:`, payload);
       switch (payload[RYDER_COMMAND_FIELD]) {
         case RyderCommand.CoalesceRequestServer: {
           const { responses } = payload;
-          responses.forEach(p => processPayload(event, p));
+          responses.forEach((p) => processPayload(event, p));
           break;
         }
         default:
@@ -232,14 +219,10 @@ export function createClientBridge(options: ClientBridgeOptions) {
 
   return {
     invoke(propertyPath: PropertyKey[], ...args: unknown[]) {
-      const invokePayload = createPayload(
-        RyderCommand.InvokeClient,
-        namespace,
-        {
-          propertyPath,
-          args,
-        }
-      );
+      const invokePayload = createPayload(RyderCommand.InvokeClient, namespace, {
+        propertyPath,
+        args,
+      });
       const { [RYDER_REQUEST_ID_FIELD]: requestId } = invokePayload;
       console.log(`[Invoke] Request Id: ${requestId}`);
       pendingCommandQueue.push(invokePayload);
@@ -249,27 +232,18 @@ export function createClientBridge(options: ClientBridgeOptions) {
       });
     },
     subscribe(propertyPath: PropertyKey[], onChange: (value: any) => void) {
-      const subscribePayload = createPayload(
-        RyderCommand.SubscribeClient,
-        namespace,
-        {
-          propertyPath,
-        }
-      );
-      const { [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId } =
-        subscribePayload;
+      const subscribePayload = createPayload(RyderCommand.SubscribeClient, namespace, {
+        propertyPath,
+      });
+      const { [RYDER_REQUEST_ID_FIELD]: subscriptionRequestId } = subscribePayload;
       subscriptionRequestIdMap.set(subscriptionRequestId, onChange);
       pendingCommandQueue.push(subscribePayload);
       flushPendingCommandQueue();
       return () => {
-        const unsubscribePayload = createPayload(
-          RyderCommand.UnsubscribeClient,
-          namespace,
-          {
-            subscriptionRequestId,
-            propertyPath,
-          }
-        );
+        const unsubscribePayload = createPayload(RyderCommand.UnsubscribeClient, namespace, {
+          subscriptionRequestId,
+          propertyPath,
+        });
         pendingCommandQueue.push(unsubscribePayload);
         flushPendingCommandQueue();
         subscriptionRequestIdMap.delete(subscriptionRequestId);

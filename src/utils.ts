@@ -1,13 +1,14 @@
 import { nanoid } from 'nanoid/non-secure';
+
 import {
+  PROTOCOL_VERSION,
   RYDER_COMMAND_FIELD,
-  RyderCommand,
+  RYDER_NAMESPACE_FIELD,
   RYDER_REQUEST_ID_FIELD,
   RYDER_VERSION_FIELD,
   RyderClientCommands,
+  RyderCommand,
   RyderServerCommands,
-  PROTOCOL_VERSION,
-  RYDER_NAMESPACE_FIELD,
 } from './constants';
 
 interface RyderPayloadCommonFields {
@@ -79,10 +80,7 @@ interface CoalesceRequestServerPayload extends RyderPayloadCommonFields {
   responses: ServerPayloadNoCoalescingRequest[];
 }
 
-export type ClientPayloadNoCoalescingRequest =
-  | InvokeClientPayload
-  | SubscribeClientPayload
-  | UnsubscribeClientPayload;
+export type ClientPayloadNoCoalescingRequest = InvokeClientPayload | SubscribeClientPayload | UnsubscribeClientPayload;
 
 type ServerPayloadNoCoalescingRequest =
   | InvokeServerErrorPayload
@@ -94,13 +92,9 @@ type ServerPayloadNoCoalescingRequest =
   | UnsubscribeServerErrorPayload
   | DiscoveryServerPayload;
 
-export type ClientPayload =
-  | ClientPayloadNoCoalescingRequest
-  | CoalesceRequestClientPayload;
+export type ClientPayload = ClientPayloadNoCoalescingRequest | CoalesceRequestClientPayload;
 
-export type ServerPayload =
-  | ServerPayloadNoCoalescingRequest
-  | CoalesceRequestServerPayload;
+export type ServerPayload = ServerPayloadNoCoalescingRequest | CoalesceRequestServerPayload;
 
 /**
  * @internal
@@ -110,11 +104,8 @@ const generateRequestId = () => nanoid(10);
 export function createPayload<T extends RyderCommand>(
   command: T,
   namespace: string,
-  payload: Omit<
-    Extract<ClientPayload | ServerPayload, { [RYDER_COMMAND_FIELD]: T }>,
-    keyof RyderPayloadCommonFields
-  >,
-  requestId?: string
+  payload: Omit<Extract<ClientPayload | ServerPayload, { [RYDER_COMMAND_FIELD]: T }>, keyof RyderPayloadCommonFields>,
+  requestId?: string,
 ) {
   const _requestId = requestId || generateRequestId();
   return {
@@ -129,12 +120,9 @@ export function createPayload<T extends RyderCommand>(
 /**
  * @internal
  */
-export const generateSubscriptionKey = (propertyPath: PropertyKey[]) =>
-  propertyPath.join('_');
+export const generateSubscriptionKey = (propertyPath: PropertyKey[]) => propertyPath.join('_');
 
-function isRyderPayload(
-  payload: unknown
-): payload is ClientPayload | ServerPayload {
+function isRyderPayload(payload: unknown): payload is ClientPayload | ServerPayload {
   return (
     typeof payload === 'object' &&
     payload !== null &&
@@ -148,16 +136,12 @@ function isRyderPayload(
 function matchVersion(version: number) {
   const match = version === PROTOCOL_VERSION;
   if (!match) {
-    console.warn(
-      `Mismatched Ryder Protocol version ${version}. Expected version: ${PROTOCOL_VERSION}.`
-    );
+    console.warn(`Mismatched Ryder Protocol version ${version}. Expected version: ${PROTOCOL_VERSION}.`);
   }
   return match;
 }
 
-export function isRyderClientPayload(
-  payload: unknown
-): payload is ClientPayload {
+export function isRyderClientPayload(payload: unknown): payload is ClientPayload {
   return (
     isRyderPayload(payload) &&
     RyderClientCommands.includes(payload[RYDER_COMMAND_FIELD]) &&
@@ -165,9 +149,7 @@ export function isRyderClientPayload(
   );
 }
 
-export function isRyderServerPayload(
-  payload: unknown
-): payload is ServerPayload {
+export function isRyderServerPayload(payload: unknown): payload is ServerPayload {
   return (
     isRyderPayload(payload) &&
     RyderServerCommands.includes(payload[RYDER_COMMAND_FIELD]) &&
@@ -176,27 +158,24 @@ export function isRyderServerPayload(
 }
 
 export function isTargetNamespace(payload: ServerPayload, namespace: string) {
-  return (
-    payload[RYDER_NAMESPACE_FIELD] === namespace ||
-    payload[RYDER_NAMESPACE_FIELD] === '*'
-  );
+  return payload[RYDER_NAMESPACE_FIELD] === namespace || payload[RYDER_NAMESPACE_FIELD] === '*';
 }
 
-export function noProcessing<T>(value: T) {
-  return value;
+export function defaultSerializer(value: unknown) {
+  return JSON.stringify(value);
+}
+
+export function defaultDeserializer(value: string) {
+  return JSON.parse(value);
 }
 
 function timeout(timeout: number) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(resolve, timeout);
   });
 }
 
-export async function retry<T>(
-  action: () => T,
-  retryLimit: number,
-  retryTimeout: number
-) {
+export async function retry<T>(action: () => T, retryLimit: number, retryTimeout: number) {
   let tryCount = 0;
 
   // eslint-disable-next-line no-constant-condition

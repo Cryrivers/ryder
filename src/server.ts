@@ -1,16 +1,12 @@
-import {
-  RyderCommand,
-  RYDER_COMMAND_FIELD,
-  RYDER_NAMESPACE_FIELD,
-  RYDER_REQUEST_ID_FIELD,
-} from './constants';
+import { RYDER_COMMAND_FIELD, RYDER_NAMESPACE_FIELD, RYDER_REQUEST_ID_FIELD, RyderCommand } from './constants';
 import type { MessageSource } from './typings';
 import {
   ClientPayload,
   createPayload,
+  defaultDeserializer,
+  defaultSerializer,
   generateSubscriptionKey,
   isRyderClientPayload,
-  noProcessing,
   retry,
 } from './utils';
 
@@ -35,20 +31,17 @@ interface ServerBridgeOptions {
    * @param  {(value:unknown) => void} onValueChange callback for data source updating the value
    * @returns {() => void} Unsubscribe function
    */
-  subscriptionHandler: (
-    propertyPath: PropertyKey[],
-    onValueChange: (value: unknown) => void
-  ) => () => void;
+  subscriptionHandler: (propertyPath: PropertyKey[], onValueChange: (value: unknown) => void) => () => void;
   /**
    * Custom JSON Serializer for custom objects.
    * The client and server should have the same serializer in order to communicate properly.
    */
-  serializer?: (value: unknown) => unknown;
+  serializer?: (value: unknown) => string;
   /**
    * Custom JSON Deserializer for custom objects
    * The client and server should have the same deserializer in order to communicate properly.
    */
-  deserializer?: (value: unknown) => unknown;
+  deserializer?: (value: string) => unknown;
   /**
    * Retry on error of `invokeHandler` and `subscriptionHandler`
    * by setting retry interval and limit of numbers
@@ -65,8 +58,8 @@ interface ServerBridgeOptions {
 
 export function createServerBridge(options: ServerBridgeOptions) {
   const {
-    serializer = noProcessing,
-    deserializer = noProcessing,
+    serializer = defaultSerializer,
+    deserializer = defaultDeserializer,
     invokeHandler,
     subscriptionHandler,
     retryOnError = false,
@@ -83,29 +76,15 @@ export function createServerBridge(options: ServerBridgeOptions) {
     }
   >();
 
-  async function processPayload(
-    source: MessageSource,
-    payload: ClientPayload,
-    requestCoalescing: boolean
-  ) {
+  async function processPayload(source: MessageSource, payload: ClientPayload, requestCoalescing: boolean) {
     switch (payload[RYDER_COMMAND_FIELD]) {
       case RyderCommand.InvokeClient: {
-        const {
-          propertyPath,
-          args,
-          [RYDER_REQUEST_ID_FIELD]: requestId,
-          [RYDER_NAMESPACE_FIELD]: namespace,
-        } = payload;
+        const { propertyPath, args, [RYDER_REQUEST_ID_FIELD]: requestId, [RYDER_NAMESPACE_FIELD]: namespace } = payload;
         try {
           const act = () => invokeHandler(propertyPath);
-          const targetVariable = retryOnError
-            ? await retry(act, retryOnError.limit, retryOnError.interval)
-            : act;
+          const targetVariable = retryOnError ? await retry(act, retryOnError.limit, retryOnError.interval) : act();
 
-          const value =
-            typeof targetVariable === 'function'
-              ? await targetVariable(...args)
-              : targetVariable;
+          const value = typeof targetVariable === 'function' ? await targetVariable(...args) : targetVariable;
 
           const reponsePayload = createPayload(
             RyderCommand.InvokeServerSuccess,
@@ -113,26 +92,21 @@ export function createServerBridge(options: ServerBridgeOptions) {
             {
               value,
             },
-            requestId
+            requestId,
           );
           console.log(`[InvokeSuccess]: ${requestId}`);
           if (requestCoalescing) {
             return reponsePayload;
           } else {
-            source.postMessage(JSON.stringify(serializer(reponsePayload)));
+            source.postMessage(serializer(reponsePayload));
           }
         } catch (ex) {
           const reason = ex instanceof Error ? ex.message : String(ex);
-          const responsePayload = createPayload(
-            RyderCommand.InvokeServerError,
-            namespace,
-            { reason },
-            requestId
-          );
+          const responsePayload = createPayload(RyderCommand.InvokeServerError, namespace, { reason }, requestId);
           if (requestCoalescing) {
             return responsePayload;
           } else {
-            source.postMessage(JSON.stringify(serializer(responsePayload)));
+            source.postMessage(serializer(responsePayload));
           }
         }
         break;
@@ -150,26 +124,23 @@ export function createServerBridge(options: ServerBridgeOptions) {
           });
         } else {
           const act = () =>
-            subscriptionHandler(propertyPath, value => {
+            subscriptionHandler(propertyPath, (value) => {
               // Send the value changes to all listeners
               const sub = subscriptionManager.get(subscriptionKey);
               if (sub) {
-                sub.listeners.forEach(
-                  ({ source, namespace, subscriptionRequestId }) =>
-                    source.postMessage(
-                      JSON.stringify(
-                        serializer(
-                          createPayload(
-                            RyderCommand.SubscribeServerUpdate,
-                            namespace,
-                            {
-                              value,
-                            },
-                            subscriptionRequestId
-                          )
-                        )
-                      )
-                    )
+                sub.listeners.forEach(({ source, namespace, subscriptionRequestId }) =>
+                  source.postMessage(
+                    serializer(
+                      createPayload(
+                        RyderCommand.SubscribeServerUpdate,
+                        namespace,
+                        {
+                          value,
+                        },
+                        subscriptionRequestId,
+                      ),
+                    ),
+                  ),
                 );
               } else {
                 // Potential Memory Leaking
@@ -177,35 +148,22 @@ export function createServerBridge(options: ServerBridgeOptions) {
               }
             });
 
-          const unsubscribe = retryOnError
-            ? await retry(act, retryOnError.limit, retryOnError.interval)
-            : act();
+          const unsubscribe = retryOnError ? await retry(act, retryOnError.limit, retryOnError.interval) : act();
           subscriptionManager.set(subscriptionKey, {
             unsubscribe,
-            listeners: [
-              { source, subscriptionRequestId: clientRequestId, namespace },
-            ],
+            listeners: [{ source, subscriptionRequestId: clientRequestId, namespace }],
           });
         }
-        const responsePayload = createPayload(
-          RyderCommand.SubscribeServerSuccess,
-          namespace,
-          {},
-          clientRequestId
-        );
+        const responsePayload = createPayload(RyderCommand.SubscribeServerSuccess, namespace, {}, clientRequestId);
         if (requestCoalescing) {
           return responsePayload;
         } else {
-          source.postMessage(JSON.stringify(serializer(responsePayload)));
+          source.postMessage(serializer(responsePayload));
         }
         break;
       }
       case RyderCommand.UnsubscribeClient: {
-        const {
-          propertyPath,
-          subscriptionRequestId,
-          [RYDER_NAMESPACE_FIELD]: namespace,
-        } = payload;
+        const { propertyPath, subscriptionRequestId, [RYDER_NAMESPACE_FIELD]: namespace } = payload;
         const subscriptionKey = generateSubscriptionKey(propertyPath);
         const sub = subscriptionManager.get(subscriptionKey);
 
@@ -214,7 +172,7 @@ export function createServerBridge(options: ServerBridgeOptions) {
             RyderCommand.UnsubscribeServerSuccess,
             namespace,
             {},
-            payload[RYDER_REQUEST_ID_FIELD]
+            payload[RYDER_REQUEST_ID_FIELD],
           );
 
           if (sub.listeners.length === 1) {
@@ -226,29 +184,21 @@ export function createServerBridge(options: ServerBridgeOptions) {
               if (requestCoalescing) {
                 return responsePayload;
               } else {
-                listener.source.postMessage(
-                  JSON.stringify(serializer(responsePayload))
-                );
+                listener.source.postMessage(serializer(responsePayload));
               }
             } else {
               // Unable to get `source`
               // UnsubscribeError
             }
           } else {
-            const itemToBeRemoved = sub.listeners.find(
-              item => item.subscriptionRequestId === subscriptionRequestId
-            );
+            const itemToBeRemoved = sub.listeners.find((item) => item.subscriptionRequestId === subscriptionRequestId);
             if (itemToBeRemoved) {
-              sub.listeners = sub.listeners.filter(
-                item => item !== itemToBeRemoved
-              );
+              sub.listeners = sub.listeners.filter((item) => item !== itemToBeRemoved);
               // UnsubscribeSuccess
               if (requestCoalescing) {
                 return responsePayload;
               } else {
-                itemToBeRemoved.source.postMessage(
-                  JSON.stringify(serializer(responsePayload))
-                );
+                itemToBeRemoved.source.postMessage(serializer(responsePayload));
               }
             } else {
               // Unable to get `source`
@@ -267,7 +217,7 @@ export function createServerBridge(options: ServerBridgeOptions) {
     const { data, source } = event;
     let payload: unknown;
     try {
-      payload = deserializer(JSON.parse(data));
+      payload = deserializer(data);
     } catch {
       // Unable to parse and deserialize the message. just ignore
       return;
@@ -277,29 +227,14 @@ export function createServerBridge(options: ServerBridgeOptions) {
       console.log(`[RyderServer] Payload:`, payload);
       switch (payload[RYDER_COMMAND_FIELD]) {
         case RyderCommand.CoalesceRequestClient: {
-          const {
-            requests,
-            [RYDER_REQUEST_ID_FIELD]: requestId,
-            [RYDER_NAMESPACE_FIELD]: namespace,
-          } = payload;
+          const { requests, [RYDER_REQUEST_ID_FIELD]: requestId, [RYDER_NAMESPACE_FIELD]: namespace } = payload;
 
           const responses = (
-            await Promise.all(
-              requests.map(payload => processPayload(source, payload, true))
-            )
+            await Promise.all(requests.map((payload) => processPayload(source, payload, true)))
           ).filter(nonEmpty);
 
           source.postMessage(
-            JSON.stringify(
-              serializer(
-                createPayload(
-                  RyderCommand.CoalesceRequestServer,
-                  namespace,
-                  { responses },
-                  requestId
-                )
-              )
-            )
+            serializer(createPayload(RyderCommand.CoalesceRequestServer, namespace, { responses }, requestId)),
           );
         }
         default:
@@ -313,14 +248,8 @@ export function createServerBridge(options: ServerBridgeOptions) {
 
   return {
     sendDiscoveryMessage: (sources: MessageSource[], namespace = '*') => {
-      sources.forEach(source =>
-        source.postMessage(
-          JSON.stringify(
-            serializer(
-              createPayload(RyderCommand.DiscoveryServer, namespace, {})
-            )
-          )
-        )
+      sources.forEach((source) =>
+        source.postMessage(serializer(createPayload(RyderCommand.DiscoveryServer, namespace, {}))),
       );
     },
     messageHandler: clientPayloadHandler,
